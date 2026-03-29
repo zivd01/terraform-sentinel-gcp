@@ -36,6 +36,33 @@ The `sentinel.hcl` file groups and defines two central policies aimed at prevent
 
 *Note: All code blocks in these files include English comments providing focused explanations for infrastructure administrators.*
 
+### 2.1 Deploying the Policies to TFE 
+
+We have added automated deployment scripts to package these Sentinel rules and attach them to your target TFE Workspace.
+
+1. **`setup_tfe_policies.tf`**: This Terraform configuration uses the `tfe_policy_set` and `tfe_slug` resources to bundle your local Sentinel rules dynamically.
+2. **`deploy_policy_set.sh`**: A helper bash script that executes the Terraform deployment.
+
+**Deployment Steps:**
+1. Open a terminal and authenticate to Terraform Cloud using `terraform login`.
+2. Set your target environment variables:
+   ```bash
+   export TFE_ORG_NAME="your-organization"
+   export TFE_WORKSPACE_ID="ws-12345678" 
+   ```
+3. Run the deployment script:
+   ```bash
+   chmod +x ./deploy_policy_set.sh
+   ./deploy_policy_set.sh
+   ```
+Once applied, the Policy Set is bound to your workspace with a "hard-mandatory" enforcement level. Any future `terraform plan` triggered in this Workspace will automatically evaluate your infrastructure against these security policies.
+
+### 🛡️ 2.2 Security Insights & Best Practices
+
+As part of securing this integration against hostile activities, please observe the following strictly:
+- **Avoid Static Keys**: Do not use the `setup-gcp-tfe.sh` script (JSON Key method) in production. Always prefer Workload Identity Federation (WIF) via `setup-wif-gcp-tfe.sh`.
+- **Principle of Least Privilege**: The setup scripts grant `roles/editor` by default for demonstration purposes. In a real-world scenario, you MUST restrict the Service Account to narrowed roles, such as `roles/compute.instanceAdmin.v1` and `roles/compute.securityAdmin`.
+
 ## 3. Drift Detection and Remediation
 
 One of the challenges in managing cloud infrastructure is that users with broad permissions might manually execute changes within the GCP Console—changes that are not documented or tracked by the central Terraform code. This phenomenon is known as **Drift**.
