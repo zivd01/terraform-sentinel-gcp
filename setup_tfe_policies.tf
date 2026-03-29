@@ -16,6 +16,11 @@ variable "tfe_workspace_id" {
   type        = string
 }
 
+variable "tfe_policy_set_name" {
+  description = "The name of the Sentinel Policy Set"
+  type        = string
+}
+
 # The tfe_slug data source packages your local Sentinel policies
 # You can change source_path to a designated folder if you move the .sentinel files
 data "tfe_slug" "gcp_sentinel_policies" {
@@ -24,7 +29,7 @@ data "tfe_slug" "gcp_sentinel_policies" {
 
 # The policy set resource configured based on the local slug
 resource "tfe_policy_set" "gcp_governance" {
-  name          = "gcp-governance-policies"
+  name          = var.tfe_policy_set_name
   description   = "Sentinel policies enforcing GCP machine types and firewall rules"
   organization  = var.tfe_organization
   workspace_ids = [var.tfe_workspace_id]

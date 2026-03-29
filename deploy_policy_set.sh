@@ -12,9 +12,25 @@ if ! command -v terraform &> /dev/null; then
     exit 1
 fi
 
-# Configuration: Prompt user or use environment variables
-TFE_ORG="${TFE_ORG_NAME:-your-org-name}"
-TFE_WS_ID="${TFE_WORKSPACE_ID:-ws-12345678}"
+# --- Load Configuration ---
+if [ ! -f "config.env" ]; then
+    echo "Error: config.env file not found. Please create it and fill in your variables."
+    exit 1
+fi
+source config.env
+
+# Validate required variables
+REQUIRED_VARS=("TFE_ORG_NAME" "TFE_WORKSPACE_ID" "TFE_POLICY_SET_NAME")
+for VAR in "${REQUIRED_VARS[@]}"; do
+    if [ -z "${!VAR}" ] || [[ "${!VAR}" == "your-"* ]] || [[ "${!VAR}" == "ws-123"* ]]; then
+        echo "Error: Missing or default value for $VAR in config.env. Please configure it properly."
+        exit 1
+    fi
+done
+
+TFE_ORG="$TFE_ORG_NAME"
+TFE_WS_ID="$TFE_WORKSPACE_ID"
+TFE_PS_NAME="$TFE_POLICY_SET_NAME"
 
 if [ -z "$TFE_TOKEN" ]; then
     echo "Warning: TFE_TOKEN environment variable not set. You must be logged into TFE locally via 'terraform login'."
@@ -31,6 +47,7 @@ echo "Applying TFE Policy Set configurations..."
 terraform apply \
   -var="tfe_organization=$TFE_ORG" \
   -var="tfe_workspace_id=$TFE_WS_ID" \
+  -var="tfe_policy_set_name=$TFE_PS_NAME" \
   -auto-approve
 
 echo "✅ Sentinel Policies successfully attached! You can verify this in Terraform Cloud under your Workspace > Policy Sets."

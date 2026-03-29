@@ -5,15 +5,31 @@
 
 set -e
 
-# --- Configuration Variables ---
-PROJECT_ID="your-gcp-project-id"
-TFE_ORG="your-tfe-organization-name"
-TFE_WORKSPACE="your-tfe-workspace-name"
+# --- Load Configuration ---
+if [ ! -f "config.env" ]; then
+    echo "Error: config.env file not found. Please create it and fill in your variables."
+    exit 1
+fi
+source config.env
 
-SA_NAME="tfe-dynamic-sa"
+# Validate required variables
+REQUIRED_VARS=("GCP_PROJECT_ID" "TFE_ORG_NAME" "TFE_WORKSPACE_NAME" "GCP_SA_NAME" "GCP_WIF_POOL_NAME" "GCP_WIF_PROVIDER_NAME")
+for VAR in "${REQUIRED_VARS[@]}"; do
+    if [ -z "${!VAR}" ] || [[ "${!VAR}" == "your-"* ]]; then
+        echo "Error: Missing or default value for $VAR in config.env. Please configure it properly."
+        exit 1
+    fi
+done
+
+# Map variables for the script
+PROJECT_ID="$GCP_PROJECT_ID"
+TFE_ORG="$TFE_ORG_NAME"
+TFE_WORKSPACE="$TFE_WORKSPACE_NAME"
+SA_NAME="$GCP_SA_NAME"
+
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-POOL_NAME="tfe-identity-pool"
-PROVIDER_NAME="tfe-oidc-provider"
+POOL_NAME="$GCP_WIF_POOL_NAME"
+PROVIDER_NAME="$GCP_WIF_PROVIDER_NAME"
 
 gcloud config set project $PROJECT_ID
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
@@ -23,10 +39,25 @@ echo "Creating Service Account: $SA_NAME"
 gcloud iam service-accounts create $SA_NAME --display-name="TFE Dynamic Auth SA" || true
 
 # 2. Grant necessary roles to the Service Account
-echo "Granting roles/editor to $SA_EMAIL"
+# Applying Principle of Least Privilege: Removing the overly broad 'roles/editor'.
+# Instead, we grant exactly what Terraform needs to provision Compute and Networks.
+echo "Granting specific Compute Engine & Network Admin roles to $SA_EMAIL"
+
 gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:${SA_EMAIL}" \
-    --role="roles/editor"
+    --role="roles/compute.instanceAdmin.v1"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/compute.networkAdmin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/compute.securityAdmin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/iam.serviceAccountUser"
 
 # 3. Create the Workload Identity Pool
 echo "Creating Workload Identity Pool: $POOL_NAME"

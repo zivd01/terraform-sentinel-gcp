@@ -5,11 +5,25 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-# --- Configuration Variables ---
-# Define your GCP Project ID
-PROJECT_ID="your-gcp-project-id"
-# Define the Service Account name for Terraform
-SA_NAME="terraform-tfe-sa"
+# --- Load Configuration ---
+if [ ! -f "config.env" ]; then
+    echo "Error: config.env file not found. Please create it and fill in your variables."
+    exit 1
+fi
+source config.env
+
+# Validate required variables
+REQUIRED_VARS=("GCP_PROJECT_ID" "GCP_SA_NAME")
+for VAR in "${REQUIRED_VARS[@]}"; do
+    if [ -z "${!VAR}" ] || [[ "${!VAR}" == "your-"* ]]; then
+        echo "Error: Missing or default value for $VAR in config.env. Please configure it properly."
+        exit 1
+    fi
+done
+
+# Map variables for the script
+PROJECT_ID="$GCP_PROJECT_ID"
+SA_NAME="$GCP_SA_NAME"
 # Define the full Service Account email address
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
@@ -23,11 +37,23 @@ gcloud iam service-accounts create $SA_NAME \
     --display-name="Terraform TFE Service Account"
 
 # 3. Grant necessary roles to the Service Account
-# For Terraform to create resources (like VMs and Firewalls) and enforce policies, it needs appropriate permissions.
-# Often, 'roles/editor' is used for general resource management, but you should restrict this in production (Principle of Least Privilege).
+# Applying Principle of Least Privilege: Removing the overly broad 'roles/editor'.
+# Instead, we grant exactly what Terraform needs to provision Compute and Networks.
 gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:${SA_EMAIL}" \
-    --role="roles/editor"
+    --role="roles/compute.instanceAdmin.v1"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/compute.networkAdmin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/compute.securityAdmin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/iam.serviceAccountUser"
 
 # Additional roles might be needed depending on what you provision (e.g., Compute Admin, Security Admin).
 # gcloud projects add-iam-policy-binding $PROJECT_ID \

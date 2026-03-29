@@ -3,6 +3,7 @@
 # creation of overly expensive VMs.
 
 import "tfplan/v2" as tfplan
+import "strings"
 
 # Define a list of allowed machine types. 
 allowed_machine_types = [
@@ -28,18 +29,27 @@ is_valid = true
 
 # Check standard instances
 for instances as address, instance {
-  mt = instance.change.after.machine_type else ""
-  if mt not in allowed_machine_types {
-    print("Violation:", address, "uses forbidden machine type:", mt)
+  mt_raw = instance.change.after.machine_type else ""
+  
+  # O(1) String normalization: Extract base machine type using string parsing.
+  mt_parts = strings.split(mt_raw, "/")
+  base_mt = mt_parts[length(mt_parts) - 1]
+  
+  if base_mt not in allowed_machine_types {
+    print("Violation:", address, "uses forbidden machine type:", base_mt)
     is_valid = false
   }
 }
 
 # Check templates
 for templates as address, template {
-  mt = template.change.after.machine_type else ""
-  if mt not in allowed_machine_types {
-    print("Violation:", address, "template uses forbidden machine type:", mt)
+  mt_raw = template.change.after.machine_type else ""
+  
+  mt_parts = strings.split(mt_raw, "/")
+  base_mt = mt_parts[length(mt_parts) - 1]
+  
+  if base_mt not in allowed_machine_types {
+    print("Violation:", address, "template uses forbidden machine type:", base_mt)
     is_valid = false
   }
 }
