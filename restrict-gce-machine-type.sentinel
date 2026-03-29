@@ -1,0 +1,50 @@
+# This Sentinel policy ensures that all Google Compute Engine instances
+# AND instance templates use an approved machine type, preventing the 
+# creation of overly expensive VMs.
+
+import "tfplan/v2" as tfplan
+
+# Define a list of allowed machine types. 
+allowed_machine_types = [
+  "e2-micro",
+  "e2-small",
+  "e2-medium",
+]
+
+# Find regular compute instances
+instances = filter tfplan.resource_changes as address, rc {
+  rc.type is "google_compute_instance" and
+  (rc.change.actions contains "create" or rc.change.actions contains "update")
+}
+
+# Add protection for Instance Templates (used by Auto Scaling / Instance Groups)
+# This prevents a loophole where a user creates an expensive VM template instead of a standalone VM.
+templates = filter tfplan.resource_changes as address, rc {
+  rc.type is "google_compute_instance_template" and
+  (rc.change.actions contains "create" or rc.change.actions contains "update")
+}
+
+is_valid = true
+
+# Check standard instances
+for instances as address, instance {
+  mt = instance.change.after.machine_type else ""
+  if mt not in allowed_machine_types {
+    print("Violation:", address, "uses forbidden machine type:", mt)
+    is_valid = false
+  }
+}
+
+# Check templates
+for templates as address, template {
+  mt = template.change.after.machine_type else ""
+  if mt not in allowed_machine_types {
+    print("Violation:", address, "template uses forbidden machine type:", mt)
+    is_valid = false
+  }
+}
+
+# The main rule that determines if the policy passes or fails
+main = rule {
+  is_valid
+}

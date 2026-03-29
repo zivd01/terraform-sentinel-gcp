@@ -1,0 +1,62 @@
+# This Sentinel policy prevents the creation of Google Cloud Firewall rules
+# that open forbidden ports (like SSH port 22 or RDP port 3389) to the entire internet (0.0.0.0/0).
+
+import "tfplan/v2" as tfplan
+import "strings"
+
+# Define ports that are strictly forbidden to be opened to the public
+forbidden_ports = ["22", "3389"]
+
+firewalls = filter tfplan.resource_changes as address, rc {
+  rc.type is "google_compute_firewall" and
+  (rc.change.actions contains "create" or rc.change.actions contains "update")
+}
+
+is_valid = true
+
+# Iterate over all firewall rules in the plan
+for firewalls as address, fw {
+  # If source_ranges is not specified, GCP defaults to 0.0.0.0/0.
+  source_ranges = fw.change.after.source_ranges else ["0.0.0.0/0"]
+  
+  if "0.0.0.0/0" in source_ranges {
+    
+    # Inspect the allowed block (protocols and ports)
+    allows = fw.change.after.allow else []
+    for allows as a {
+      ports = a.ports else []
+      for ports as port {
+        
+        # Check against each forbidden port
+        for forbidden_ports as fp {
+          
+          # Exact match: port is exactly "22"
+          if port == fp {
+            print("Violation:", address, "- Firewall rule opens forbidden port", fp, "to 0.0.0.0/0.")
+            is_valid = false
+          
+          # Range match: port is a range like "20-25"
+          } else if strings.contains(port, "-") {
+            bounds = strings.split(port, "-")
+            if length(bounds) == 2 {
+              # Convert to integer to check if the forbidden port falls within the range
+              start_port = int(bounds[0])
+              end_port = int(bounds[1])
+              fp_int = int(fp)
+              
+              if fp_int >= start_port and fp_int <= end_port {
+                print("Violation:", address, "- Firewall rule opens port range", port, "which includes forbidden port", fp, "to 0.0.0.0/0.")
+                is_valid = false
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# The main rule enforcing the validation result
+main = rule {
+  is_valid
+}
