@@ -1,4 +1,4 @@
-# Beginner's Course: Infrastructure Management and Security with Terraform & Sentinel on GCP
+# Infrastructure Management and Security with Terraform & Sentinel on GCP
 
 Welcome to the comprehensive technical guide for our Governance project!
 This guide was written specifically for Junior DevOps, Infrastructure, and Cloud engineers who are learning Terraform and want to understand exactly **what** this project does, **how** it works behind the scenes, and get a **detailed breakdown** of the code itself.
@@ -105,5 +105,5 @@ resource "tfe_policy_set" "sentinel_policies" {
 ```
 
 ---
-**Summary of this Beginner's Course:** We have seen advanced use of infrastructure management where automation (Bash/CLI) wraps permissions (IAM/WIF), the global deployment tool (Terraform) reads configurations, and the policy isolation layer (Sentinel) restricts power and protects the company from mistakes that cost thousands of dollars or expose security risks! 
+**Summary:** We have seen advanced use of infrastructure management where automation (Bash/CLI) wraps permissions (IAM/WIF), the global deployment tool (Terraform) reads configurations, and the policy isolation layer (Sentinel) restricts power and protects the company from mistakes that cost thousands of dollars or expose security risks! 
 Good luck natively on your journey to the Cloud!
