@@ -39,6 +39,24 @@ All automation scripts automatically load and validate these variables before ex
 ### 🛡️ Module Validations (`utils.sh`)
 Behind the scenes, all Bash automation scripts load a central dependency module called `utils.sh`. I engineered this file according to the **Single Responsibility Principle (SRP)**. Its only job is to dynamically pull variables from `config.env` and rigorously validate them. If any variable is missing or contains placeholder text, `utils.sh` will instantly catch it and halt the executing script, actively preventing destructive cloud misconfigurations!
 
+**Execution Sequence Diagram:**
+```text
+  User              Entry Script           utils.sh              GCP/TFE APIs
+   |                     |                     |                      |
+   |--- 1. Executes ---->|                     |                      |
+   |   (e.g setup.sh)    |                     |                      |
+   |                     |--- 2. Sources ----->|                      |
+   |                     |    Validation       |                      |
+   |                     |                     |-- 3. Parses -> `config.env`
+   |                     |<-- 4. Returns ------|                      |
+   |                     |    Clean Config     |                      |
+   |                     |                     |                      |
+   |                     |---- 5. Executes Idempotent API Calls ----->|
+   |                     |     (e.g., IAM Create, TFE Apply)          |
+   |<-- 6. Completes ----|                     |                      |
+   |                     |                     |                      |
+```
+
 ## 1. Connecting TFE to GCP Cloud (Generating Tokens and Permissions)
 
 **Where do I run the scripts?**
