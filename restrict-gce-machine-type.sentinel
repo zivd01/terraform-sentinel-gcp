@@ -5,7 +5,9 @@
 import "tfplan/v2" as tfplan
 import "strings"
 
-# Define a list of allowed machine types. 
+# FinOps Governance: We strictly lock down the VM offerings to the 'e2' shared-core family.
+# This prevents engineers from accidentally spinning up high-cost Compute (C2) or GPU machines,
+# effectively capping cloud-spend at the provisioning layer and eliminating billing drift!
 allowed_machine_types = [
   "e2-micro",
   "e2-small",

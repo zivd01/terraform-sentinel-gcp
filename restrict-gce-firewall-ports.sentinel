@@ -13,7 +13,16 @@ firewalls = filter tfplan.resource_changes as address, rc {
   (rc.change.actions contains "create" or rc.change.actions contains "update")
 }
 
-# Function to evaluate if a specific port definition violates our forbidden rules
+# ==============================================================================
+# Evaluates whether a given port string or range violates the forbidden constraints.
+# 
+# @param port (string): The port configuration extracted from the Terraform 
+#                       allow block (e.g., "22", "80", or range "20-25").
+# @param forbidden_ports (list of string): Matrix of statically restricted ports.
+# @return boolean: Returns `true` if the evaluated port intersects with a 
+#                  forbidden port mapping; otherwise returns `false`.
+# @throws RuntimePanic: Protected via internal regex bindings before integer conversion.
+# ==============================================================================
 func is_port_forbidden(port, forbidden_ports) {
   for forbidden_ports as fp {
     # Exact match: port is exactly "22"
@@ -37,7 +46,15 @@ func is_port_forbidden(port, forbidden_ports) {
   return false
 }
 
-# Function to evaluate an individual firewall resource
+# ==============================================================================
+# Evaluates an individual GCP Firewall resource against internet exposure rules.
+#
+# @param address (string): The immutable Terraform resource address trace.
+# @param fw (object): The `tfplan` resource block reflecting post-apply states.
+# @param forbidden_ports (list): Array passed directly down for validation matrix.
+# @return boolean: Returns `true` if the firewall safely passes security audits;
+#                  returns `false` and prints tracebacks if the firewall is hostile.
+# ==============================================================================
 func evaluate_firewall(address, fw, forbidden_ports) {
   # If source_ranges is not specified, GCP defaults to 0.0.0.0/0.
   source_ranges = fw.change.after.source_ranges else ["0.0.0.0/0"]

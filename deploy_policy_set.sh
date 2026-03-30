@@ -12,21 +12,9 @@ if ! command -v terraform &> /dev/null; then
     exit 1
 fi
 
-# --- Load Configuration ---
-if [ ! -f "config.env" ]; then
-    echo "Error: config.env file not found. Please create it and fill in your variables."
-    exit 1
-fi
-source config.env
-
-# Validate required variables
-REQUIRED_VARS=("TFE_ORG_NAME" "TFE_WORKSPACE_ID" "TFE_POLICY_SET_NAME")
-for VAR in "${REQUIRED_VARS[@]}"; do
-    if [ -z "${!VAR}" ] || [[ "${!VAR}" == "your-"* ]] || [[ "${!VAR}" == "ws-123"* ]]; then
-        echo "Error: Missing or default value for $VAR in config.env. Please configure it properly."
-        exit 1
-    fi
-done
+# --- Load and Validate Configuration ---
+source ./utils.sh || { echo "Error: utils.sh module not found!"; exit 1; }
+load_and_validate_env "TFE_ORG_NAME" "TFE_WORKSPACE_ID" "TFE_POLICY_SET_NAME"
 
 TFE_ORG="$TFE_ORG_NAME"
 TFE_WS_ID="$TFE_WORKSPACE_ID"

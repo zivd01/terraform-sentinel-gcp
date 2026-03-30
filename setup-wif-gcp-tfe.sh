@@ -5,21 +5,9 @@
 
 set -e
 
-# --- Load Configuration ---
-if [ ! -f "config.env" ]; then
-    echo "Error: config.env file not found. Please create it and fill in your variables."
-    exit 1
-fi
-source config.env
-
-# Validate required variables
-REQUIRED_VARS=("GCP_PROJECT_ID" "TFE_ORG_NAME" "TFE_WORKSPACE_NAME" "GCP_SA_NAME" "GCP_WIF_POOL_NAME" "GCP_WIF_PROVIDER_NAME")
-for VAR in "${REQUIRED_VARS[@]}"; do
-    if [ -z "${!VAR}" ] || [[ "${!VAR}" == "your-"* ]]; then
-        echo "Error: Missing or default value for $VAR in config.env. Please configure it properly."
-        exit 1
-    fi
-done
+# --- Load and Validate Configuration ---
+source ./utils.sh || { echo "Error: utils.sh module not found!"; exit 1; }
+load_and_validate_env "GCP_PROJECT_ID" "TFE_ORG_NAME" "TFE_WORKSPACE_NAME" "GCP_SA_NAME" "GCP_WIF_POOL_NAME" "GCP_WIF_PROVIDER_NAME"
 
 # Map variables for the script
 PROJECT_ID="$GCP_PROJECT_ID"
@@ -34,9 +22,13 @@ PROVIDER_NAME="$GCP_WIF_PROVIDER_NAME"
 gcloud config set project $PROJECT_ID
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
-# 1. Create the Service Account
-echo "Creating Service Account: $SA_NAME"
-gcloud iam service-accounts create $SA_NAME --display-name="TFE Dynamic Auth SA" || true
+# 1. Create the Service Account Idempotently
+if gcloud iam service-accounts describe "${SA_EMAIL}" &>/dev/null; then
+    echo "Service Account ${SA_NAME} already exists. Skipping creation."
+else
+    echo "Creating Service Account: $SA_NAME"
+    gcloud iam service-accounts create $SA_NAME --display-name="TFE Dynamic Auth SA"
+fi
 
 # 2. Grant necessary roles to the Service Account
 # Applying Principle of Least Privilege: Removing the overly broad 'roles/editor'.
@@ -59,22 +51,33 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="roles/iam.serviceAccountUser"
 
-# 3. Create the Workload Identity Pool
-echo "Creating Workload Identity Pool: $POOL_NAME"
-gcloud iam workload-identity-pools create $POOL_NAME \
-    --project=$PROJECT_ID \
-    --location="global" \
-    --display-name="TFE Global Identity Pool" || true
+# 3. Create the Workload Identity Pool Idempotently
+# Architectural Decision: Generating a Workload Identity Pool allows us to build a completely 
+# JSON-Keyless Cloud environment. This shifts authentications dynamically to memory, directly 
+# eliminating the organizational risks of data-leakage (Stolen Static Keys).
+if gcloud iam workload-identity-pools describe "$POOL_NAME" --project="$PROJECT_ID" --location="global" &>/dev/null; then
+    echo "Workload Identity Pool $POOL_NAME already exists. Skipping creation."
+else
+    echo "Creating Workload Identity Pool: $POOL_NAME"
+    gcloud iam workload-identity-pools create $POOL_NAME \
+        --project=$PROJECT_ID \
+        --location="global" \
+        --display-name="TFE Global Identity Pool"
+fi
 
-# 4. Create the OIDC Provider in the Pool for Terraform Cloud
-echo "Creating OIDC Provider: $PROVIDER_NAME"
-gcloud iam workload-identity-pools providers create-oidc $PROVIDER_NAME \
-    --project=$PROJECT_ID \
-    --location="global" \
-    --workload-identity-pool=$POOL_NAME \
-    --display-name="TFE OIDC Provider" \
-    --issuer-uri="https://app.terraform.io" \
-    --attribute-mapping="google.subject=assertion.sub,attribute.aud=assertion.aud,attribute.terraform_workspace_id=assertion.terraform_workspace_id,attribute.terraform_full_workspace=assertion.terraform_full_workspace" || true
+# 4. Create the OIDC Provider Idempotently
+if gcloud iam workload-identity-pools providers describe "$PROVIDER_NAME" --project="$PROJECT_ID" --location="global" --workload-identity-pool="$POOL_NAME" &>/dev/null; then
+    echo "OIDC Provider $PROVIDER_NAME already exists. Skipping creation."
+else
+    echo "Creating OIDC Provider: $PROVIDER_NAME"
+    gcloud iam workload-identity-pools providers create-oidc $PROVIDER_NAME \
+        --project=$PROJECT_ID \
+        --location="global" \
+        --workload-identity-pool=$POOL_NAME \
+        --display-name="TFE OIDC Provider" \
+        --issuer-uri="https://app.terraform.io" \
+        --attribute-mapping="google.subject=assertion.sub,attribute.aud=assertion.aud,attribute.terraform_workspace_id=assertion.terraform_workspace_id,attribute.terraform_full_workspace=assertion.terraform_full_workspace"
+fi
 
 # 5. Bind the Service Account to the Workload Identity Pool (Restrict to specific Workspace)
 echo "Binding Service Account to TFE Workspace: ${TFE_ORG}/${TFE_WORKSPACE}"

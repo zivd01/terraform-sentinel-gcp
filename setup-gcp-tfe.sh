@@ -5,21 +5,9 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-# --- Load Configuration ---
-if [ ! -f "config.env" ]; then
-    echo "Error: config.env file not found. Please create it and fill in your variables."
-    exit 1
-fi
-source config.env
-
-# Validate required variables
-REQUIRED_VARS=("GCP_PROJECT_ID" "GCP_SA_NAME")
-for VAR in "${REQUIRED_VARS[@]}"; do
-    if [ -z "${!VAR}" ] || [[ "${!VAR}" == "your-"* ]]; then
-        echo "Error: Missing or default value for $VAR in config.env. Please configure it properly."
-        exit 1
-    fi
-done
+# --- Load and Validate Configuration ---
+source ./utils.sh || { echo "Error: utils.sh module not found!"; exit 1; }
+load_and_validate_env "GCP_PROJECT_ID" "GCP_SA_NAME"
 
 # Map variables for the script
 PROJECT_ID="$GCP_PROJECT_ID"
@@ -31,10 +19,16 @@ SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 # This command ensures that all subsequent gcloud commands are executed against the correct project.
 gcloud config set project $PROJECT_ID
 
-# 2. Create the Service Account
-# This command creates a new Service Account in GCP which Terraform will use to authenticate.
-gcloud iam service-accounts create $SA_NAME \
-    --display-name="Terraform TFE Service Account"
+# 2. Create the Service Account Idempotently
+# Architectural Decision: We wrap this creation linearly in a 'describe' state-check to natively 
+# support repeated CI/CD executions. If a build-server runs this twice, checking state prevents a crash.
+if gcloud iam service-accounts describe "${SA_EMAIL}" &>/dev/null; then
+    echo "Service Account ${SA_NAME} already exists. Skipping creation."
+else
+    echo "Creating Service Account: $SA_NAME"
+    gcloud iam service-accounts create $SA_NAME \
+        --display-name="Terraform TFE Service Account"
+fi
 
 # 3. Grant necessary roles to the Service Account
 # Applying Principle of Least Privilege: Removing the overly broad 'roles/editor'.
@@ -55,14 +49,9 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="roles/iam.serviceAccountUser"
 
-# Additional roles might be needed depending on what you provision (e.g., Compute Admin, Security Admin).
-# gcloud projects add-iam-policy-binding $PROJECT_ID \
-#     --member="serviceAccount:${SA_EMAIL}" \
-#     --role="roles/compute.admin"
-
 # 4. Generate the JSON key for the Service Account
-# This command creates a JSON key file which contains the credentials.
-# Terraform TFE uses this key to authenticate with GCP.
+# Warning (Risk Acceptance): Generating a static JSON key inherently forces Terraform Cloud 
+# to become responsible for storing a highly sensitive private credential. If possible, upgrade to WIF.
 gcloud iam service-accounts keys create terraform-key.json \
     --iam-account=$SA_EMAIL
 

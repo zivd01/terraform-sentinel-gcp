@@ -1,5 +1,31 @@
 # Infrastructure Governance and Management in Google Cloud (GCP) Using Terraform Cloud / Enterprise
 
+```text
+ +---------------------+                  +---------------------+
+ |  Terraform Cloud    |                  |  Google Cloud (GCP) |
+ |  (TFE Workspace)    |                  |                     |
+ |                     |   OIDC Token     |  +---------------+  |
+ | 1. TFE Run Starts --|----------------->|--| WIF Pool      |  |
+ |                     |                  |  +---------------+  |
+ |                     |                  |          |          |
+ |                     |                  |          v          |
+ |                     |                  |  +---------------+  |
+ |                     |                  |  | WIF Provider  |  |
+ |                     |  Impersonated SA |  +---------------+  |
+ | 2. Authenticated  <-|----- Token ------|--| Service Acct  |  |
+ |    Workspace        |                  |  +---------------+  |
+ +---------------------+                  |                     |
+          |                               |                     |
+          v                               |                     |
+ +---------------------+                  |                     |
+ |  Sentinel Engine    |                  |                     |
+ |                     |  Provisioning    |  +---------------+  |
+ | - Machine Types     |-- Policy Checks->|  | Compute VMs & |  |
+ | - Firewall Ports    |                  |  | Firewalls     |  |
+ +---------------------+                  |  +---------------+  |
+                                          +---------------------+
+```
+
 This project is designed to demonstrate to infrastructure managers how to govern, manage, and secure a cloud environment in GCP by utilizing the advanced capabilities of Terraform Cloud / Enterprise (TFE), particularly through the use of Sentinel for policy enforcement and manual change detection (Drift Detection).
 
 ## 0. Configuration Setup (`config.env`)
