@@ -36,6 +36,9 @@ Before running any scripts in this project, you must define your environment var
 
 All automation scripts automatically load and validate these variables before execution to prevent misconfigurations.
 
+### 🛡️ Module Validations (`utils.sh`)
+Behind the scenes, all Bash automation scripts load a central dependency module called `utils.sh`. I engineered this file according to the **Single Responsibility Principle (SRP)**. Its only job is to dynamically pull variables from `config.env` and rigorously validate them. If any variable is missing or contains placeholder text, `utils.sh` will instantly catch it and halt the executing script, actively preventing destructive cloud misconfigurations!
+
 ## 1. Connecting TFE to GCP Cloud (Generating Tokens and Permissions)
 
 **Where do I run the scripts?**
